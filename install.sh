@@ -63,7 +63,7 @@ ${c_bold}workbuddy2api 云端一键安装脚本${c_reset}
   --listen ADDR:PORT    直接指定完整监听地址   (覆盖 --host/--port)
   --api-key KEY         面板/网关密钥          (默认自动生成随机 32 位)
   --repo OWNER/REPO     发行版仓库             (默认 ${DEFAULT_RELEASE_REPO})
-  --version TAG         安装指定版本           (默认 latest；例如 v1.11.11)
+  --version TAG         安装指定版本           (默认 latest；例如 v1.11.12)
   --user NAME           运行服务的系统用户     (默认 ${SERVICE_USER}；填 root 则以 root 运行)
   --tz ZONE             时区                   (默认 ${DEFAULT_TZ})
   --no-cli              不安装 login / signin_bin / credit 工具
@@ -230,7 +230,7 @@ download_release() {
 
   log "下载预编译二进制：${url}"
   curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 -o "$archive" "$url" \
-    || die "下载失败。检查 Release 是否已生成，或指定版本：--version v1.11.11"
+    || die "下载失败。检查 Release 是否已生成，或指定版本：--version v1.11.12"
   [ -s "$archive" ] || die "下载文件为空：$archive"
 
   log "下载并校验 SHA-256..."

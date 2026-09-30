@@ -176,10 +176,15 @@ jobs:
         run: |
           cd dist
           cp ../install.sh install.sh
+          cp ../install.ps1 install.ps1
+          cp wb2api-panel-v*-windows-amd64.zip wb2api_windows_amd64.zip
           for f in wb2api_linux_*.tar.gz; do
             sha256sum "$f" > "$f.sha256"
           done
-          sha256sum *.zip *.tar.gz install.sh > checksums.txt
+          for f in wb2api_windows_*.zip; do
+            sha256sum "$f" > "$f.sha256"
+          done
+          sha256sum *.zip *.tar.gz install.sh install.ps1 > checksums.txt
           ls -la
       - name: 上一版 tag（compare 链接用）
         id: prev
@@ -196,6 +201,11 @@ jobs:
             Linux 云端一键安装：
             ```bash
             curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | sudo bash
+            ```
+
+            Windows 云端一键安装（PowerShell，自包含 exe，不注册服务）：
+            ```powershell
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex"
             ```
 
             完整变更：https://github.com/${{ github.repository }}/compare/${{ steps.prev.outputs.prev }}...${{ github.ref_name }}
@@ -230,3 +240,59 @@ jobs:
             exit 1
           fi
           echo "installer smoke test OK (HTTP $CODE)"
+
+  windows-smoke:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - name: 验证云端 Windows 安装脚本
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME"
+          $installer = Join-Path $env:RUNNER_TEMP 'install.ps1'
+          $dir = Join-Path $env:RUNNER_TEMP 'wb2api-windows-smoke'
+          $proc = $null
+
+          try {
+            Invoke-WebRequest -Uri "$base/install.ps1" -OutFile $installer
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -InstallDir $dir -DownloadBase $base -NoLaunch
+            if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with code $LASTEXITCODE" }
+
+            $exe = Join-Path $dir 'wb2api.exe'
+            $config = Join-Path $dir 'config.json'
+            $stdout = Join-Path $dir 'stdout.log'
+            $stderr = Join-Path $dir 'stderr.log'
+            $proc = Start-Process -FilePath $exe `
+              -ArgumentList "-config `"$config`"" `
+              -WorkingDirectory $dir `
+              -RedirectStandardOutput $stdout `
+              -RedirectStandardError $stderr `
+              -PassThru
+
+            $ok = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              $code = & curl.exe -s -o NUL -w '%{http_code}' --max-time 2 http://127.0.0.1:7863/healthz
+              if ($code -in @('200', '503')) {
+                $ok = $true
+                break
+              }
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not $ok) {
+              if (Test-Path -LiteralPath $stdout) { Get-Content -LiteralPath $stdout }
+              if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr }
+              throw "Windows installer smoke test failed (HTTP $code)"
+            }
+            Write-Host "Windows installer smoke test OK (HTTP $code)"
+          }
+          finally {
+            if ($null -ne $proc -and -not $proc.HasExited) {
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path -LiteralPath $dir) {
+              Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }

@@ -262,7 +262,7 @@ INSTALL_URL=https://github.com/ccmaoxiong/workbuddy2api-panel/releases/latest/do
 curl -fsSL "$INSTALL_URL" | sudo bash -s -- --port 8080
 curl -fsSL "$INSTALL_URL" | sudo bash -s -- --listen 127.0.0.1:7863
 curl -fsSL "$INSTALL_URL" | sudo bash -s -- --api-key <你的密钥>
-curl -fsSL "$INSTALL_URL" | sudo bash -s -- --version v1.11.11
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --version v1.11.12
 curl -fsSL "$INSTALL_URL" | sudo bash -s -- --no-cli
 curl -fsSL "$INSTALL_URL" | sudo bash -s -- --uninstall
 curl -fsSL "$INSTALL_URL" | sudo bash -s -- --uninstall --purge
@@ -273,7 +273,7 @@ curl -fsSL "$INSTALL_URL" | sudo bash -s -- --uninstall --purge
 - `--port`：监听端口
 - `--listen`：完整监听地址，适合前置 Nginx / Caddy
 - `--api-key`：指定面板密钥，缺省随机生成 32 位
-- `--version`：安装指定 Release，例如 `v1.11.11`
+- `--version`：安装指定 Release，例如 `v1.11.12`
 - `--no-cli`：只安装面板主程序，不安装 CLI 工具
 - `--user root`：以 root 运行服务
 - `--uninstall [--purge]`：卸载，`--purge` 连安装目录一起删除
@@ -293,6 +293,29 @@ systemctl status wb2api --no-pager   # 状态
 journalctl -u wb2api -f             # 实时日志
 systemctl restart wb2api            # 重启
 ```
+
+### 一键安装脚本（Windows，云端下载自包含 exe）
+
+Windows 沿用原项目的单文件运行方式：Release 下载 ZIP，解压后直接运行 `wb2api.exe`，
+不安装 Go、不注册系统服务、不需要管理员权限。默认安装到
+`%LOCALAPPDATA%\WorkBuddy2API`，重复执行会在保留 `config.json`、`auths/`、`data/` 的前提下升级。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/ccmaoxiong/workbuddy2api-panel/releases/latest/download/install.ps1 | iex"
+```
+
+安装后首次启动会自动生成 `config.json` 和随机 `api_key`，随后打开面板：
+`http://127.0.0.1:7863/panel/`。
+
+需要自定义安装目录或不自动启动时：
+
+```powershell
+$script = irm https://github.com/ccmaoxiong/workbuddy2api-panel/releases/latest/download/install.ps1
+& ([scriptblock]::Create($script)) -InstallDir 'D:\WorkBuddy2API' -NoLaunch
+```
+
+固定发布包为 `wb2api_windows_amd64.zip`；原项目同款版本化包
+`wb2api-panel-v<版本>-windows-amd64.zip` 仍会继续发布。
 
 ### 方式一：Docker Compose
 
