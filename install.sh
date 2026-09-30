@@ -225,8 +225,6 @@ download_release() {
   sha_url="${url}.sha256"
 
   tmp="$(mktemp -d)"
-  # shellcheck disable=SC2064
-  trap 'rm -rf "$tmp"' RETURN
   archive="${tmp}/${asset}"
   sha_file="${tmp}/${asset}.sha256"
 
@@ -276,6 +274,7 @@ download_release() {
   else
     INSTALLED_VERSION="$RELEASE_VERSION"
   fi
+  rm -rf "$tmp" || true
 }
 
 # ── 目录与配置 ─────────────────────────────────────────────────────────────

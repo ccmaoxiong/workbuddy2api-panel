@@ -206,7 +206,7 @@ jobs:
           set -euo pipefail
           TMP="$(mktemp -d)"
           PID=""
-          trap 'if [ -n "$PID" ]; then kill "$PID" 2>/dev/null || true; fi; rm -rf "$TMP"' EXIT
+          trap 'if [ -n "$PID" ]; then sudo kill "$PID" 2>/dev/null || true; fi; sudo rm -rf "$TMP"' EXIT
           sudo bash dist/install.sh \
             --dir "${TMP}/app" \
             --listen 127.0.0.1:17863 \
@@ -214,7 +214,7 @@ jobs:
             --user root \
             --no-service \
             --version "$GITHUB_REF_NAME"
-          "${TMP}/app/wb2api" -config "${TMP}/app/config.json" > "${TMP}/app.log" 2>&1 &
+          sudo "${TMP}/app/wb2api" -config "${TMP}/app/config.json" > "${TMP}/app.log" 2>&1 &
           PID=$!
           ok=0
           for i in $(seq 1 20); do
