@@ -252,10 +252,10 @@ curl -s http://localhost:7863/healthz
 
 ```bash
 # 一行安装（脚本自己 clone 源码，无需先下载）
-curl -fsSL https://raw.githubusercontent.com/linguo2625469/workbuddy2api-panel/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ccmaoxiong/workbuddy2api-panel/main/install.sh | sudo bash
 
 # 或先拿到脚本再跑（方便先看内容 / 传参）
-git clone https://github.com/linguo2625469/workbuddy2api-panel.git
+git clone https://github.com/ccmaoxiong/workbuddy2api-panel.git
 cd workbuddy2api-panel
 sudo bash install.sh
 ```

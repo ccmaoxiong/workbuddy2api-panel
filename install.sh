@@ -16,7 +16,7 @@
 #   sudo bash install.sh --uninstall         # 卸载
 #
 # 一行安装（无需先 clone，脚本自己拉源码）：
-#   curl -fsSL https://raw.githubusercontent.com/linguo2625469/workbuddy2api-panel/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/ccmaoxiong/workbuddy2api-panel/main/install.sh | sudo bash
 #
 # 重复执行即「原地升级」：重新拉源码 → 重新编译 → 重启服务；
 # 已有 config.json / auths/ / data/ 一律保留。
@@ -27,7 +27,7 @@ set -euo pipefail
 APP_NAME="wb2api"
 SERVICE_NAME="wb2api"
 SERVICE_DESC="workbuddy2api — CodeBuddy 账号池网关 + Web 管理面板"
-DEFAULT_REPO="https://github.com/linguo2625469/workbuddy2api-panel.git"
+DEFAULT_REPO="https://github.com/ccmaoxiong/workbuddy2api-panel.git"
 DEFAULT_BRANCH="main"
 GO_MIN_VERSION="1.22.5"
 # 官方源取不到版本号时的兜底版本（保证 >= GO_MIN_VERSION 且确定存在）
