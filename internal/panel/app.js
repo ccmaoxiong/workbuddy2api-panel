@@ -330,7 +330,7 @@ function go(v) {
   if (v === 'logs') loadLogs();
   if (v === 'usage') loadUsage();
   if (v === 'packages') loadPackages();
-  if (v === 'taskscenter') reattachQueueView();
+  if (v === 'taskscenter') { reattachQueueView(); loadAutoTasks(); }
 }
 document.querySelectorAll('.nav a').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.view); history.replaceState(null, '', '#' + a.dataset.view); });
 /* 首次进入延到本轮脚本求值之后再 go()。
@@ -1105,7 +1105,7 @@ $('btnRefresh').onclick = async () => {
 function refreshVisible() {
   if (view === 'accounts') loadOverview(true);
   else if (view === 'logs') loadLogs();
-  else if (view === 'taskscenter') reattachQueueView();
+  else if (view === 'taskscenter') { reattachQueueView(); loadAutoTasks(); }
 }
 function start() {
   loadOverview(true);
@@ -1538,6 +1538,53 @@ async function loadSchoolVouchers() {
 $('btnSchoolVouchers').onclick = loadSchoolVouchers;
 $('btnVcClose').onclick = () => $('vcVeil').classList.remove('on');
 $('btnVcRefresh').onclick = loadSchoolVouchers;
+
+/* 成长任务队列。lastQueueSeq 记录本页启动过的队列代次：执行结束后的残留 items
+   （running=false 但 seq 停在旧值）不再回写视图——否则扫描结果 3 秒后被上一轮
+   队列状态覆盖。 */
+/* 任务自动化：后台按间隔自动跑「执行全部待办」同管线，此处只做状态回显与热改。
+   开关/间隔是面板内存态（重启回落默认「开启、2 小时」），改完立即重排下一轮。 */
+let qaBusy = false;
+function qaFmtWhen(iso) {
+  const ms = parseAPITime(iso);
+  return ms ? fmtLocalDateTime(ms) : '';
+}
+async function loadAutoTasks() {
+  let d;
+  try { d = await api('tasks/auto'); } catch (e) { return; }
+  const en = $('qaEnabled'), iv = $('qaInterval'), note = $('qaNote');
+  if (!en || !iv || !note) return;
+  en.checked = !!d.enabled;
+  iv.value = String(d.interval_minutes || 120);
+  const parts = [];
+  if (d.enabled) {
+    const next = qaFmtWhen(d.next_at);
+    parts.push(next ? '下次 ' + next : '已开启');
+  } else {
+    parts.push('已暂停');
+  }
+  if (d.queue_running) parts.push('队列执行中');
+  else if (d.runs > 0) {
+    if (d.last_skipped) parts.push('上轮跳过');
+    else if (d.last_started) parts.push('上轮执行 ' + d.last_total + ' 项');
+    else parts.push('上轮无待办');
+    const last = qaFmtWhen(d.last_at);
+    if (last) parts.push(last);
+  }
+  note.textContent = parts.join(' · ');
+  note.className = 'qauto-note ' + (d.enabled ? 'on' : 'off');
+}
+async function saveAutoTasks(body) {
+  if (qaBusy) return;
+  qaBusy = true;
+  try {
+    await api('tasks/auto', { method: 'POST', body: JSON.stringify(body) });
+    toast('任务自动化设置已保存', 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+  finally { qaBusy = false; loadAutoTasks(); }
+}
+$('qaEnabled').onchange = () => saveAutoTasks({ enabled: $('qaEnabled').checked });
+$('qaInterval').onchange = () => saveAutoTasks({ interval_minutes: Number($('qaInterval').value) });
 
 /* 成长任务队列。lastQueueSeq 记录本页启动过的队列代次：执行结束后的残留 items
    （running=false 但 seq 停在旧值）不再回写视图——否则扫描结果 3 秒后被上一轮

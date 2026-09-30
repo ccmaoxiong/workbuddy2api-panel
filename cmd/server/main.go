@@ -31,7 +31,9 @@ import (
 )
 
 // appVersion 网关版本（fork 版：面板 + 任务体系），透出到 /panel/api/overview。
-const appVersion = "1.11.10-panel"
+// var 而非 const：安装脚本用 -ldflags "-X main.appVersion=..." 注入构建版本
+// （便于在面板上一眼看出服务器跑的是哪个构建）。不注入时就是下面这个版本号。
+var appVersion = "1.11.10-panel"
 
 // usagePathFor 由 state 文件路径推出用量文件路径：同目录、文件名 usage.json。
 // 这样 config 里改 state_file 时用量数据跟着走，不需要额外配置项。
@@ -304,6 +306,9 @@ func main() {
 	defer stop()
 	go sch.Run(ctx)
 	sch.StartBalanceRefresh(ctx, cfg.BalanceRefreshInterval)
+	// 任务自动化：面板后台按间隔自动跑任务中心队列（与「执行全部待办」同管线），
+	// 补上调度器每日整点之间的空档；开关与间隔可在任务中心页热改。
+	pn.StartAutoTasks(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,

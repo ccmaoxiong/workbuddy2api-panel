@@ -115,6 +115,7 @@ WorkBuddy2API 是一个自托管的 **OpenAI 兼容反向代理网关**，将腾
 
 - **全账号任务扫描**：一键拉取每个账号的成长任务（未完成且可自动化的 19 项，含小程序口径的「校园日」与「小程序首对话」）+ 开学季待办，列表一目了然
 - **执行队列**：把待办按账号排队执行——账号内串行（与单任务/一键完成共用互斥锁），账号间可选并发（1-3）；执行进度实时更新到每个条目
+- **自动执行**（默认开启）：后台按间隔（默认 2 小时，可改 30 分钟–24 小时）自己跑一遍「扫描 → 接受 → 逐项执行 → 回读 → 自动领奖」，进程启动 90 秒后先补跑一轮；开关与间隔就在任务中心页，改完立即重排下一轮，无需人工点击
 - **开学季独立状态卡**：每账号 5 任务（分享/桌面/对话×3/专家/学生认证）的状态矩阵 + 剩余抽奖次数，一键触发全账号闭环
 - **日志分频道**：运行日志按「任务 / 对话 / 系统」三个频道筛选——对话流量再大，任务结果也不会被冲掉；日志条目带频道徽标与时间
 
@@ -244,7 +245,52 @@ curl -s http://localhost:7863/healthz
 > 镜像 tag 规则：`main` 分支推送 `latest` / `main` / `sha-xxxxxx`；打 `v*` tag 额外发布
 > `1.2.3` / `1.2` / `1` 语义化版本；PR 仅构建验证、不推送。
 
-### 方式一：Docker Compose（推荐服务器部署）
+### 一键安装脚本（Linux 服务器，推荐）
+
+服务器上**不需要预先装 Go，也不需要在本机编译**：脚本会在服务器上装依赖、拉源码、
+本地编译静态二进制，再用 systemd 托管。
+
+```bash
+# 一行安装（脚本自己 clone 源码，无需先下载）
+curl -fsSL https://raw.githubusercontent.com/linguo2625469/workbuddy2api-panel/main/install.sh | sudo bash
+
+# 或先拿到脚本再跑（方便先看内容 / 传参）
+git clone https://github.com/linguo2625469/workbuddy2api-panel.git
+cd workbuddy2api-panel
+sudo bash install.sh
+```
+
+常用参数：
+
+```bash
+sudo bash install.sh --port 8080               # 换端口
+sudo bash install.sh --listen 127.0.0.1:7863   # 只监听本机（前置 Nginx / Caddy）
+sudo bash install.sh --api-key <你的密钥>       # 指定密钥（缺省随机 32 位）
+sudo bash install.sh --with-cli                # 额外编译 login / signin_bin / credit 及配套脚本
+sudo bash install.sh --user root               # 以 root 运行（缺省建 wb2api 系统用户）
+sudo bash install.sh --uninstall [--purge]     # 卸载（--purge 连安装目录一起删）
+```
+
+脚本做的事：装 `git`/`curl`/`ca-certificates` → 缺 Go 或版本 < 1.22.5 时装官方 Go →
+`CGO_ENABLED=0` 编译（产物不依赖 glibc，Alpine 也能跑）→ 建 `auths/` `data/` 与带随机密钥的
+`config.json` → 注册并启动 `wb2api.service` → 健康检查，最后打印面板地址与密钥。
+
+- 默认装到 `/opt/wb2api`；以 `wb2api` 系统用户运行，systemd 沙箱只允许写安装目录
+- **重复执行 = 原地升级**：重拉源码 → 重编译 → 重启服务，`config.json` / `auths/` / `data/` 原样保留
+- 默认监听 `0.0.0.0:7863` 且为明文 HTTP：公网使用请设强 `api_key` 并置于 HTTPS 反代之后
+- 国内网络默认走 `goproxy.cn`；要换源：`GOPROXY_URL=https://goproxy.io,direct sudo -E bash install.sh`
+- 在 Windows 上拷贝脚本到服务器时（CRLF 会让 bash 报 `$'\r': command not found`）：
+  先 `sed -i 's/\r$//' install.sh` 再执行
+
+装完的常用运维命令：
+
+```bash
+systemctl status wb2api --no-pager   # 状态
+journalctl -u wb2api -f             # 实时日志
+systemctl restart wb2api            # 重启
+```
+
+### 方式一：Docker Compose
 
 ```bash
 # 1. 克隆
@@ -559,6 +605,7 @@ http://127.0.0.1:7863/panel/
 |---|---|
 | **账号池** | 统计条（总数/可用/冷却/禁用/可用积分合计/粘性会话）+ 账号表：状态标签（可用/限流冷却/积分冷却/熔断/已禁用）、积分量条、成功失败计数、在途、单号操作（签到/余额/任务/解冻/禁用/移除）；批量「全部签到」「旅行巡检」「活跃上报」「全部保活」 |
 | **添加账号**（顶部按钮） | 浏览器内完成 OAuth 设备授权（显示授权链接 + 自动轮询），登录后凭证落盘并**热加载进池，免重启** |
+| **任务中心** | 全账号待办扫描 + 执行队列（账号内串行、账号间可选并发）+ **自动执行**：后台按可配间隔（默认 2 小时）自己跑完整管线，任务到点自动推进；开关与间隔页内可改 |
 | **积分任务**（账号行内「任务」按钮） | 展示全部任务（进度 / 奖励分数与能量 / 状态）；「全部接受」批量报名；「一键完成」覆盖 **17 个任务**（推进进度 + 异步计分等待 + **自动领奖**，幂等可重复点）；其余任务展示操作指引 |
 | **模型与档位** | 实时查询上游：每模型的积分倍率、默认思考档、支持的档位（含「off（可关）」）、上下文长度与最大输出；若存在探测数据，最大输出列显示**实测上限与钳制告警**（见「探测模型真实输出上限」）。列表支持**按条件查询**：关键词（ID / 名称 / 描述 / 厂商，空格分词 AND）、域（CN / Global）、能力（工具 / 视觉 / 思考 / 默认）、思考档位、价格（折扣 / 限时免费 / 打折），以及按倍率、上下文、最大输出、ID 排序 |
 | **用量** | 指标卡（请求数 / 总 token / prompt / completion / 失败 / 平均延迟）+ Token 时序图（渐变柱、均值线、峰值标注）+ 用量明细（按账号 / 模型 / 域切换）+ 积分扣除历史。**时间范围**支持 今天 / 近 24 小时 / 近 3 天 / 近 7 天 / 近 30 天 / 全部历史 / **自定义区间**（精确到分钟），卡片、表格与图表全部按同一窗口统计 |

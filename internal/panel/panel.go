@@ -89,6 +89,11 @@ type Panel struct {
 	// 任务中心执行队列（taskcenter.go）。
 	queueOnce sync.Once
 	q         *queueState
+
+	// 任务自动化（autorun.go）：后台按间隔自动跑「执行全部待办」同管线。
+	// 与上方队列共用 queueState，自动轮与手动轮不会并发双开。
+	autoOnce sync.Once
+	auto     *autoTaskState
 }
 
 // tryLockAccount 尝试锁定账号的任务执行；已在执行返回 false。
@@ -171,6 +176,8 @@ func (p *Panel) routes() {
 	p.mux.HandleFunc("POST /panel/api/tasks/scan_all", p.withAuth(p.tasksScanAll))
 	p.mux.HandleFunc("POST /panel/api/tasks/run_queue", p.withAuth(p.tasksRunQueue))
 	p.mux.HandleFunc("GET /panel/api/tasks/queue", p.withAuth(p.tasksQueueStatus))
+	p.mux.HandleFunc("GET /panel/api/tasks/auto", p.withAuth(p.autoTasksStatusHandler))
+	p.mux.HandleFunc("POST /panel/api/tasks/auto", p.withAuth(p.autoTasksConfigHandler))
 	p.mux.HandleFunc("GET /panel/api/school/vouchers", p.withAuth(p.schoolVouchers))
 	p.mux.HandleFunc("POST /panel/api/checkin_all", p.withAuth(p.checkinAll))
 	p.mux.HandleFunc("POST /panel/api/travel_all", p.withAuth(p.travelAll))

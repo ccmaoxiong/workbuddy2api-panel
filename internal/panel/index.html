@@ -85,6 +85,16 @@ body {
 .qprog .qbar { flex: 1; height: 4px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .qprog .qbar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .5s ease; }
 .qprog .note { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qauto {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px;
+  margin: 10px 16px 0; padding: 9px 12px; border: 1px solid var(--line-soft);
+  border-radius: 8px; background: var(--surface-2);
+}
+.qauto-sw { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; user-select: none; }
+.qauto .grow { flex: 1; }
+.qauto-note { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.qauto-note.on { color: var(--ok); }
+.qauto-note.off { color: var(--warn); }
 .qgroup { padding: 4px 0 10px; }
 .qgroup + .qgroup { border-top: 1px solid var(--line-soft); }
 .qgroup header {
@@ -670,6 +680,21 @@ legend { font-size: 12px; color: var(--ink-3); font-weight: 600; padding-bottom:
           <button class="xs" id="btnScanAll">扫描待办</button>
           <button class="xs primary" id="btnRunQueue">执行全部待办</button>
         </header>
+        <div class="qauto" id="qAuto">
+          <label class="qauto-sw"><input type="checkbox" id="qaEnabled"><span>自动执行</span></label>
+          <label class="sel-note">间隔
+            <select id="qaInterval">
+              <option value="30">30 分钟</option>
+              <option value="60">1 小时</option>
+              <option value="120" selected>2 小时</option>
+              <option value="360">6 小时</option>
+              <option value="720">12 小时</option>
+              <option value="1440">24 小时</option>
+            </select>
+          </label>
+          <span class="grow"></span>
+          <span class="qauto-note" id="qaNote">读取中…</span>
+        </div>
         <div class="qprog" id="qProg" hidden>
           <div class="qbar"><i id="qBarFill"></i></div>
           <span class="note" id="qProgText"></span>
