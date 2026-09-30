@@ -247,40 +247,44 @@ curl -s http://localhost:7863/healthz
 
 ### 一键安装脚本（Linux 服务器，推荐）
 
-服务器上**不需要预先装 Go，也不需要在本机编译**：脚本会在服务器上装依赖、拉源码、
-本地编译静态二进制，再用 systemd 托管。
+服务器不需要安装 Go，也不拉源码编译。脚本会识别 CPU 架构，从 GitHub Releases 下载预编译
+二进制压缩包，校验 SHA-256 后安装，再注册 systemd 服务。
 
 ```bash
-# 一行安装（脚本自己 clone 源码，无需先下载）
-curl -fsSL https://raw.githubusercontent.com/ccmaoxiong/workbuddy2api-panel/main/install.sh | sudo bash
+# 一行安装（下载最新 Release 二进制）
+curl -fsSL https://github.com/ccmaoxiong/workbuddy2api-panel/releases/latest/download/install.sh | sudo bash
+```
 
-# 或先拿到脚本再跑（方便先看内容 / 传参）
-git clone https://github.com/ccmaoxiong/workbuddy2api-panel.git
-cd workbuddy2api-panel
-sudo bash install.sh
+传参：
+
+```bash
+INSTALL_URL=https://github.com/ccmaoxiong/workbuddy2api-panel/releases/latest/download/install.sh
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --port 8080
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --listen 127.0.0.1:7863
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --api-key <你的密钥>
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --version v1.11.11
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --no-cli
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --uninstall
+curl -fsSL "$INSTALL_URL" | sudo bash -s -- --uninstall --purge
 ```
 
 常用参数：
 
-```bash
-sudo bash install.sh --port 8080               # 换端口
-sudo bash install.sh --listen 127.0.0.1:7863   # 只监听本机（前置 Nginx / Caddy）
-sudo bash install.sh --api-key <你的密钥>       # 指定密钥（缺省随机 32 位）
-sudo bash install.sh --with-cli                # 额外编译 login / signin_bin / credit 及配套脚本
-sudo bash install.sh --user root               # 以 root 运行（缺省建 wb2api 系统用户）
-sudo bash install.sh --uninstall [--purge]     # 卸载（--purge 连安装目录一起删）
-```
+- `--port`：监听端口
+- `--listen`：完整监听地址，适合前置 Nginx / Caddy
+- `--api-key`：指定面板密钥，缺省随机生成 32 位
+- `--version`：安装指定 Release，例如 `v1.11.11`
+- `--no-cli`：只安装面板主程序，不安装 CLI 工具
+- `--user root`：以 root 运行服务
+- `--uninstall [--purge]`：卸载，`--purge` 连安装目录一起删除
 
-脚本做的事：装 `git`/`curl`/`ca-certificates` → 缺 Go 或版本 < 1.22.5 时装官方 Go →
-`CGO_ENABLED=0` 编译（产物不依赖 glibc，Alpine 也能跑）→ 建 `auths/` `data/` 与带随机密钥的
-`config.json` → 注册并启动 `wb2api.service` → 健康检查，最后打印面板地址与密钥。
+安装包支持 `amd64` / `arm64` / `armv7` / `armv6`。脚本会下载 `wb2api_linux_<arch>.tar.gz`
+和对应 `.sha256` 文件，校验通过后再替换二进制。
 
 - 默认装到 `/opt/wb2api`；以 `wb2api` 系统用户运行，systemd 沙箱只允许写安装目录
-- **重复执行 = 原地升级**：重拉源码 → 重编译 → 重启服务，`config.json` / `auths/` / `data/` 原样保留
+- **重复执行 = 原地升级**：重新下载最新二进制并重启，`config.json` / `auths/` / `data/` 原样保留
 - 默认监听 `0.0.0.0:7863` 且为明文 HTTP：公网使用请设强 `api_key` 并置于 HTTPS 反代之后
-- 国内网络默认走 `goproxy.cn`；要换源：`GOPROXY_URL=https://goproxy.io,direct sudo -E bash install.sh`
-- 在 Windows 上拷贝脚本到服务器时（CRLF 会让 bash 报 `$'\r': command not found`）：
-  先 `sed -i 's/\r$//' install.sh` 再执行
+- 非官方发行版可通过 `--repo OWNER/REPO` 指定 GitHub 仓库
 
 装完的常用运维命令：
 

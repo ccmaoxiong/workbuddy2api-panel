@@ -98,9 +98,55 @@ jobs:
           path: ${{ env.name }}
           retention-days: 7
 
-  # 仅 tag 触发：校验 tag == 源码版本（-ci 演练 tag 豁免）→ 汇总资产 → 建 Release
+  # tag 专用：构建固定命名的一键安装包（内容含主程序与可选 CLI 工具）。
+  linux-installer:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { asset: amd64, goarch: amd64, goarm: "" }
+          - { asset: arm64, goarch: arm64, goarm: "" }
+          - { asset: armv7, goarch: arm, goarm: "7" }
+          - { asset: armv6, goarch: arm, goarm: "6" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: 构建 Linux 一键安装包
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
+        run: |
+          set -euo pipefail
+          ASSET="${{ matrix.asset }}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUNDLE="bundle-linux-${ASSET}"
+          mkdir -p "$BUNDLE" dist
+          go build -trimpath -ldflags "-s -w -X main.appVersion=${VERSION}" -o "$BUNDLE/wb2api" ./cmd/server
+          go build -trimpath -ldflags "-s -w" -o "$BUNDLE/login" ./cmd/login
+          go build -trimpath -ldflags "-s -w" -o "$BUNDLE/signin_bin" ./cmd/signin
+          go build -trimpath -ldflags "-s -w" -o "$BUNDLE/credit" ./cmd/credit
+          cp login.sh signin.sh credit.sh "$BUNDLE/"
+          printf '%s\n' "$VERSION" > "$BUNDLE/VERSION"
+          tar -C "$BUNDLE" -czf "dist/wb2api_linux_${ASSET}.tar.gz" .
+          cd dist
+          sha256sum "wb2api_linux_${ASSET}.tar.gz" > "wb2api_linux_${ASSET}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundle-${{ matrix.asset }}
+          path: dist/*
+          retention-days: 7
+
   publish:
-    needs: build
+    needs: [build, linux-installer]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -127,7 +173,14 @@ jobs:
           path: dist
           merge-multiple: true
       - name: checksums
-        run: cd dist && sha256sum *.zip *.tar.gz > checksums.txt && ls -la
+        run: |
+          cd dist
+          cp ../install.sh install.sh
+          for f in wb2api_linux_*.tar.gz; do
+            sha256sum "$f" > "$f.sha256"
+          done
+          sha256sum *.zip *.tar.gz install.sh > checksums.txt
+          ls -la
       - name: 上一版 tag（compare 链接用）
         id: prev
         run: |
@@ -138,7 +191,42 @@ jobs:
           name: ${{ github.ref_name }}-panel
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            CI 自动构建发布（五平台二进制 + checksums）。
+            CI 自动构建发布（Linux 一键安装包 + 五平台二进制 + checksums）。
+
+            Linux 云端一键安装：
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | sudo bash
+            ```
 
             完整变更：https://github.com/${{ github.repository }}/compare/${{ steps.prev.outputs.prev }}...${{ github.ref_name }}
           files: dist/*
+
+      - name: 验证云端安装脚本
+        run: |
+          set -euo pipefail
+          TMP="$(mktemp -d)"
+          PID=""
+          trap 'if [ -n "$PID" ]; then kill "$PID" 2>/dev/null || true; fi; rm -rf "$TMP"' EXIT
+          sudo bash dist/install.sh \
+            --dir "${TMP}/app" \
+            --listen 127.0.0.1:17863 \
+            --api-key smoke-test \
+            --user root \
+            --no-service \
+            --version "$GITHUB_REF_NAME"
+          "${TMP}/app/wb2api" -config "${TMP}/app/config.json" > "${TMP}/app.log" 2>&1 &
+          PID=$!
+          ok=0
+          for i in $(seq 1 20); do
+            CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:17863/healthz || true)"
+            case "$CODE" in
+              200|503) ok=1; break ;;
+            esac
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            echo "installer smoke test failed (HTTP ${CODE:-none})"
+            cat "${TMP}/app.log"
+            exit 1
+          fi
+          echo "installer smoke test OK (HTTP $CODE)"
